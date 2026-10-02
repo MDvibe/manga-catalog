@@ -30,28 +30,37 @@ function isFirestoreAvailable() {
  * Показ тост-уведомления
  */
 function showToast(message, type = 'info') {
-    // Создаём простое тост-уведомление
+    // Удаляем существующие тосты
+    document.querySelectorAll('.toast').forEach(t => t.remove());
+
+    const colors = {
+        error: '#f44336',
+        success: '#4caf50',
+        info: '#2196f3',
+        warning: '#ff9800'
+    };
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
     toast.style.cssText = `
         position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: ${type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : '#2196f3'};
+        bottom: 24px;
+        right: 24px;
+        background: ${colors[type] || colors.info};
         color: white;
         padding: 16px 24px;
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         z-index: 10000;
-        animation: slideIn 0.3s ease;
+        font-size: 14px;
+        max-width: 400px;
     `;
     document.body.appendChild(toast);
 
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+        toast.remove();
+    }, 3500);
 }
 
 // ===================================
@@ -239,7 +248,7 @@ function getUserReviewsFromLocalStorage() {
  * Получить публичные отзывы для манги
  */
 export async function getPublicReviews(mangaId) {
-    if (isFirestoreAvailable()) {
+    if (isFirebaseInitialized && firestore) {
         try {
             const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
             const reviewsRef = collection(firestore, 'reviews', mangaId.toString(), 'items');
@@ -251,11 +260,51 @@ export async function getPublicReviews(mangaId) {
                 ...doc.data()
             }));
         } catch (error) {
-            console.error('Ошибка загрузки публичных отзывов:', error);
-            return [];
+            console.error('Ошибка загрузки публичных отзывов из Firestore:', error);
+            // Если ошибка orderBy (например, нет индекса или поле не у всех), пробуем без orderBy
+            try {
+                const { collection, getDocs, limit } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+                const reviewsRef = collection(firestore, 'reviews', mangaId.toString(), 'items');
+                const q = query(reviewsRef, limit(50));
+                const snapshot = await getDocs(q);
+                return snapshot.docs.map(doc => ({
+                    uid: doc.id,
+                    ...doc.data()
+                }));
+            } catch (err2) {
+                console.error('Ошибка повторной загрузки публичных отзывов:', err2);
+                return [];
+            }
         }
     }
     return [];
+}
+
+/**
+ * Получить отзыв текущего пользователя для конкретной манги
+ */
+export async function getUserReviewForManga(mangaId) {
+    if (isFirestoreAvailable()) {
+        try {
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            const uid = auth.currentUser.uid;
+            const userReviewRef = doc(firestore, 'users', uid, 'reviews', mangaId.toString());
+            const snap = await getDoc(userReviewRef);
+            if (snap.exists()) {
+                return {
+                    mangaId: parseInt(mangaId),
+                    ...snap.data()
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Ошибка получения отзыва пользователя:', error);
+            const reviews = getUserReviewsFromLocalStorage();
+            return reviews.find(r => r.mangaId === parseInt(mangaId)) || null;
+        }
+    }
+    const reviews = getUserReviewsFromLocalStorage();
+    return reviews.find(r => r.mangaId === parseInt(mangaId)) || null;
 }
 
 /**
@@ -269,8 +318,8 @@ export async function addReview(mangaId, rating, text) {
             const user = auth.currentUser;
 
             const reviewData = {
-                rating,
-                text,
+                rating: parseInt(rating),
+                text: text.trim(),
                 createdAt: serverTimestamp()
             };
 
@@ -282,7 +331,7 @@ export async function addReview(mangaId, rating, text) {
             const publicReviewRef = doc(firestore, 'reviews', mangaId.toString(), 'items', uid);
             await setDoc(publicReviewRef, {
                 ...reviewData,
-                authorName: user.displayName || 'Аноним',
+                authorName: user.displayName || 'Пользователь',
                 photoURL: user.photoURL || null
             });
 
@@ -297,17 +346,114 @@ export async function addReview(mangaId, rating, text) {
     return addReviewToLocalStorage(mangaId, rating, text);
 }
 
+/**
+ * Редактировать отзыв
+ */
+export async function updateReview(mangaId, rating, text) {
+    if (isFirestoreAvailable()) {
+        try {
+            const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            const uid = auth.currentUser.uid;
+            const user = auth.currentUser;
+
+            const reviewData = {
+                rating: parseInt(rating),
+                text: text.trim(),
+                updatedAt: serverTimestamp()
+            };
+
+            // Обновляем в личных отзывах пользователя (merge: true сохраняет createdAt)
+            const userReviewRef = doc(firestore, 'users', uid, 'reviews', mangaId.toString());
+            await setDoc(userReviewRef, reviewData, { merge: true });
+
+            // Обновляем в публичных отзывах
+            const publicReviewRef = doc(firestore, 'reviews', mangaId.toString(), 'items', uid);
+            await setDoc(publicReviewRef, {
+                ...reviewData,
+                authorName: user.displayName || 'Пользователь',
+                photoURL: user.photoURL || null
+            }, { merge: true });
+
+            showToast('Отзыв обновлён!', 'success');
+            return true;
+        } catch (error) {
+            console.error('Ошибка обновления отзыва в Firestore:', error);
+            showToast('Не удалось обновить отзыв', 'error');
+            return updateReviewInLocalStorage(mangaId, rating, text);
+        }
+    }
+    return updateReviewInLocalStorage(mangaId, rating, text);
+}
+
+/**
+ * Удалить отзыв
+ */
+export async function deleteReview(mangaId) {
+    if (isFirestoreAvailable()) {
+        try {
+            const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            const uid = auth.currentUser.uid;
+
+            // Удаляем из личных отзывов пользователя
+            const userReviewRef = doc(firestore, 'users', uid, 'reviews', mangaId.toString());
+            await deleteDoc(userReviewRef);
+
+            // Удаляем из публичных отзывов
+            const publicReviewRef = doc(firestore, 'reviews', mangaId.toString(), 'items', uid);
+            await deleteDoc(publicReviewRef);
+
+            showToast('Отзыв удалён', 'info');
+            return true;
+        } catch (error) {
+            console.error('Ошибка удаления отзыва из Firestore:', error);
+            showToast('Не удалось удалить отзыв', 'error');
+            return deleteReviewFromLocalStorage(mangaId);
+        }
+    }
+    return deleteReviewFromLocalStorage(mangaId);
+}
+
 function addReviewToLocalStorage(mangaId, rating, text) {
     const reviews = getUserReviewsFromLocalStorage();
-    reviews.push({
+    const existingIndex = reviews.findIndex(r => r.mangaId === parseInt(mangaId));
+    const newEntry = {
         id: Date.now(),
-        mangaId,
-        rating,
-        text,
+        mangaId: parseInt(mangaId),
+        rating: parseInt(rating),
+        text: text.trim(),
         date: new Date().toISOString()
-    });
+    };
+
+    if (existingIndex !== -1) {
+        reviews[existingIndex] = newEntry;
+    } else {
+        reviews.push(newEntry);
+    }
+
     localStorage.setItem('manga_user_reviews', JSON.stringify(reviews));
     showToast('Отзыв сохранён локально', 'success');
+    return true;
+}
+
+function updateReviewInLocalStorage(mangaId, rating, text) {
+    const reviews = getUserReviewsFromLocalStorage();
+    const index = reviews.findIndex(r => r.mangaId === parseInt(mangaId));
+    if (index !== -1) {
+        reviews[index].rating = parseInt(rating);
+        reviews[index].text = text.trim();
+        reviews[index].updatedAt = new Date().toISOString();
+        localStorage.setItem('manga_user_reviews', JSON.stringify(reviews));
+        showToast('Отзыв обновлён локально', 'success');
+        return true;
+    }
+    return addReviewToLocalStorage(mangaId, rating, text);
+}
+
+function deleteReviewFromLocalStorage(mangaId) {
+    let reviews = getUserReviewsFromLocalStorage();
+    reviews = reviews.filter(r => r.mangaId !== parseInt(mangaId));
+    localStorage.setItem('manga_user_reviews', JSON.stringify(reviews));
+    showToast('Отзыв удалён локально', 'info');
     return true;
 }
 

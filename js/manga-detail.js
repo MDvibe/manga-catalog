@@ -3,12 +3,22 @@
 // ===================================
 
 import { MANGA_DATA, Utils, generateChapters, getRecommendations } from './data.js';
-import { getBookmarks, toggleBookmark, isBookmarked, getPublicReviews, addReview } from './storage.js';
-import { initAuth, isAuthenticated } from './auth.js';
+import {
+    getBookmarks,
+    toggleBookmark,
+    isBookmarked,
+    getPublicReviews,
+    getUserReviewForManga,
+    addReview,
+    updateReview,
+    deleteReview
+} from './storage.js';
+import { initAuth, isAuthenticated, getCurrentUser, showToast, onAuthStateChange } from './auth.js';
 
 let currentManga = null;
 let currentChapters = [];
 let selectedRating = 0;
+let isEditingMyReview = false;
 
 // ===================================
 // ИНИЦИАЛИЗАЦИЯ
@@ -95,24 +105,184 @@ function renderChapters() {
 }
 
 async function renderReviews() {
-    const container = document.getElementById('reviewsList');
-    if (!container) return;
+    const formContainer = document.getElementById('reviewFormContainer');
+    const listContainer = document.getElementById('reviewsList');
+    if (!listContainer) return;
 
-    // Загружаем публичные отзывы из Firestore/localStorage
+    // Загружаем публичные отзывы
     const reviews = await getPublicReviews(currentManga.id);
+    const user = getCurrentUser();
 
-    if (reviews.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Пока нет отзывов. Будьте первым!</p>';
+    // Проверяем, оставлял ли текущий пользователь отзыв на этот тайтл
+    let myReview = null;
+    if (user) {
+        myReview = reviews.find(r => r.uid === user.uid);
+        if (!myReview && isAuthenticated()) {
+            myReview = await getUserReviewForManga(currentManga.id);
+        }
+    }
+
+    // 1. РЕНДЕРИНГ БЛОКА ФОРМЫ / СВОЕГО ОТЗЫВА
+    if (formContainer) {
+        if (myReview && !isEditingMyReview) {
+            // Пользователь уже оставил отзыв -> показываем карточку "Ваш отзыв" с кнопками Редактировать / Удалить
+            formContainer.innerHTML = `
+                <div class="my-review-card">
+                    <div class="review-header">
+                        <div>
+                            <h3 style="font-size: 1.1rem; margin-bottom: 0.25rem;">Ваш отзыв <span class="my-review-badge">Вы</span></h3>
+                            <div class="review-rating">${'★'.repeat(myReview.rating)}${'☆'.repeat(5 - myReview.rating)}</div>
+                        </div>
+                        <div class="review-actions">
+                            <button id="editMyReviewBtn" class="btn btn-secondary btn-sm">
+                                ✏️ Редактировать
+                            </button>
+                            <button id="deleteMyReviewBtn" class="btn btn-danger btn-sm">
+                                🗑️ Удалить
+                            </button>
+                        </div>
+                    </div>
+                    <p class="review-text">${Utils.escapeHtml(myReview.text)}</p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">
+                        ${formatReviewDate(myReview)}
+                    </p>
+                </div>
+            `;
+
+            document.getElementById('editMyReviewBtn')?.addEventListener('click', () => {
+                isEditingMyReview = true;
+                selectedRating = myReview.rating;
+                renderReviews();
+            });
+
+            document.getElementById('deleteMyReviewBtn')?.addEventListener('click', async () => {
+                const confirmed = confirm('Вы уверены, что хотите удалить свой отзыв?');
+                if (!confirmed) return;
+
+                await deleteReview(currentManga.id);
+                isEditingMyReview = false;
+                selectedRating = 0;
+                renderReviews();
+            });
+
+        } else if (myReview && isEditingMyReview) {
+            // Режим редактирования существующего отзыва
+            formContainer.innerHTML = `
+                <div class="review-form" style="margin-top: 1.5rem;">
+                    <h3 style="margin-bottom: 0.75rem; font-size: 1.1rem;">✏️ Редактировать отзыв</h3>
+                    <div class="star-rating" id="reviewStarRating">
+                        ${[1, 2, 3, 4, 5].map(star => `
+                            <span class="star ${star <= selectedRating ? 'active' : ''}" data-value="${star}">
+                                ${star <= selectedRating ? '★' : '☆'}
+                            </span>
+                        `).join('')}
+                    </div>
+                    <textarea id="reviewText" class="review-textarea" placeholder="Поделитесь вашими впечатлениями о произведении...">${Utils.escapeHtml(myReview.text)}</textarea>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <button id="saveEditReviewBtn" class="btn btn-primary">💾 Сохранить изменения</button>
+                        <button id="cancelEditReviewBtn" class="btn btn-secondary">✖ Отмена</button>
+                    </div>
+                </div>
+            `;
+
+            initStarRating();
+
+            document.getElementById('saveEditReviewBtn')?.addEventListener('click', async () => {
+                if (!isAuthenticated()) {
+                    showToast('Войдите через Google, чтобы сохранить отзыв', 'warning');
+                    return;
+                }
+
+                const text = document.getElementById('reviewText')?.value.trim();
+
+                if (selectedRating === 0) {
+                    showToast('Пожалуйста, поставьте оценку', 'warning');
+                    return;
+                }
+
+                if (!text) {
+                    showToast('Пожалуйста, напишите отзыв', 'warning');
+                    return;
+                }
+
+                await updateReview(currentManga.id, selectedRating, text);
+                isEditingMyReview = false;
+                selectedRating = 0;
+                renderReviews();
+            });
+
+            document.getElementById('cancelEditReviewBtn')?.addEventListener('click', () => {
+                isEditingMyReview = false;
+                selectedRating = 0;
+                renderReviews();
+            });
+
+        } else {
+            // Форма для нового отзыва
+            formContainer.innerHTML = `
+                <div class="review-form" style="margin-top: 1.5rem;">
+                    <h3 style="margin-bottom: 0.75rem; font-size: 1.1rem;">Оставить отзыв</h3>
+                    <div class="star-rating" id="reviewStarRating">
+                        ${[1, 2, 3, 4, 5].map(star => `
+                            <span class="star ${star <= selectedRating ? 'active' : ''}" data-value="${star}">
+                                ${star <= selectedRating ? '★' : '☆'}
+                            </span>
+                        `).join('')}
+                    </div>
+                    <textarea id="reviewText" class="review-textarea" placeholder="Поделитесь вашими впечатлениями о произведении..."></textarea>
+                    <button id="submitReview" class="btn btn-primary">Отправить отзыв</button>
+                </div>
+            `;
+
+            initStarRating();
+
+            document.getElementById('submitReview')?.addEventListener('click', async () => {
+                if (!isAuthenticated()) {
+                    showToast('Войдите через Google, чтобы оставить отзыв', 'warning');
+                    return;
+                }
+
+                const text = document.getElementById('reviewText')?.value.trim();
+
+                if (selectedRating === 0) {
+                    showToast('Пожалуйста, поставьте оценку', 'warning');
+                    return;
+                }
+
+                if (!text) {
+                    showToast('Пожалуйста, напишите отзыв', 'warning');
+                    return;
+                }
+
+                await addReview(currentManga.id, selectedRating, text);
+                selectedRating = 0;
+                renderReviews();
+            });
+        }
+    }
+
+    // 2. РЕНДЕРИНГ СПИСКА ВСЕХ ПУБЛИЧНЫХ ОТЗЫВОВ (исключаем свой отзыв, т.к. он уже показан сверху)
+    const otherReviews = reviews.filter(review => !(user && review.uid === user.uid));
+
+    if (otherReviews.length === 0) {
+        if (myReview) {
+            listContainer.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 1rem 0;">Других отзывов пока нет.</p>';
+        } else {
+            listContainer.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem 0;">Пока нет отзывов. Будьте первым!</p>';
+        }
         return;
     }
 
-    container.innerHTML = reviews.map(review => `
-        <div class="review-item">
+    listContainer.innerHTML = otherReviews.map(review => `
+        <div class="review-item" id="review-${review.uid}">
             <div class="review-header">
                 <span class="review-author"><strong>${Utils.escapeHtml(review.authorName || 'Аноним')}</strong></span>
                 <div class="review-rating">${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</div>
             </div>
             <p class="review-text">${Utils.escapeHtml(review.text)}</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">
+                ${formatReviewDate(review)}
+            </p>
         </div>
     `).join('');
 }
@@ -144,76 +314,79 @@ function initButtons() {
     if (bookmarkBtn) {
         updateBookmarkButton();
         bookmarkBtn.addEventListener('click', async () => {
+            if (!isAuthenticated()) {
+                showToast('Войдите через Google, чтобы добавить в закладки', 'warning');
+                return;
+            }
             await toggleBookmark(currentManga.id);
             updateBookmarkButton();
         });
     }
 
-    // Рейтинг звёздами
-    initStarRating();
-
-    // Отправка отзыва
-    const submitBtn = document.getElementById('submitReview');
-    if (submitBtn) {
-        submitBtn.addEventListener('click', submitReviewHandler);
-    }
+    // Подписка на изменение авторизации для актуализации закладок и отзывов
+    onAuthStateChange(() => {
+        updateBookmarkButton();
+        renderReviews();
+    });
 }
 
 async function updateBookmarkButton() {
     const btn = document.getElementById('addToBookmarks');
     if (!btn) return;
 
+    if (!isAuthenticated()) {
+        btn.innerHTML = `<span class="btn-icon">🤍</span> Добавить в закладки`;
+        return;
+    }
+
     const bookmarked = await isBookmarked(currentManga.id);
     btn.innerHTML = `<span class="btn-icon">${bookmarked ? '❤️' : '🤍'}</span> ${bookmarked ? 'В закладках' : 'Добавить в закладки'}`;
 }
 
 function initStarRating() {
-    const stars = document.querySelectorAll('.star-rating .star');
+    const stars = document.querySelectorAll('#reviewStarRating .star');
 
-    stars.forEach((star, index) => {
-        star.addEventListener('click', () => {
-            selectedRating = index + 1;
+    stars.forEach(star => {
+        star.addEventListener('click', (e) => {
+            const val = parseInt(star.dataset.value);
+            selectedRating = val;
             updateStars();
         });
 
-        star.addEventListener('mouseenter', () => {
-            stars.forEach((s, i) => {
-                s.textContent = i <= index ? '★' : '☆';
+        star.addEventListener('mouseenter', (e) => {
+            const val = parseInt(star.dataset.value);
+            stars.forEach(s => {
+                const sVal = parseInt(s.dataset.value);
+                s.textContent = sVal <= val ? '★' : '☆';
             });
         });
     });
 
-    document.querySelector('.star-rating')?.addEventListener('mouseleave', updateStars);
+    document.getElementById('reviewStarRating')?.addEventListener('mouseleave', updateStars);
 }
 
 function updateStars() {
-    const stars = document.querySelectorAll('.star-rating .star');
-    stars.forEach((star, index) => {
-        star.textContent = index < selectedRating ? '★' : '☆';
-        star.classList.toggle('active', index < selectedRating);
+    const stars = document.querySelectorAll('#reviewStarRating .star');
+    stars.forEach(star => {
+        const sVal = parseInt(star.dataset.value);
+        star.textContent = sVal <= selectedRating ? '★' : '☆';
+        star.classList.toggle('active', sVal <= selectedRating);
     });
 }
 
-async function submitReviewHandler() {
-    const text = document.getElementById('reviewText')?.value.trim();
-
-    if (selectedRating === 0) {
-        alert('Пожалуйста, поставьте оценку');
-        return;
+function formatReviewDate(review) {
+    if (review.updatedAt) {
+        if (typeof review.updatedAt.toDate === 'function') {
+            return `Изменено: ${review.updatedAt.toDate().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+        }
     }
-
-    if (!text) {
-        alert('Пожалуйста, напишите отзыв');
-        return;
+    if (review.createdAt) {
+        if (typeof review.createdAt.toDate === 'function') {
+            return review.createdAt.toDate().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
     }
-
-    await addReview(currentManga.id, selectedRating, text);
-
-    // Сброс формы
-    selectedRating = 0;
-    updateStars();
-    document.getElementById('reviewText').value = '';
-
-    // Перерендер отзывов
-    renderReviews();
+    if (review.date) {
+        return new Date(review.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    return 'Недавно';
 }

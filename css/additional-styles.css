@@ -329,6 +329,7 @@
     padding: 1.5rem;
     background: var(--bg-tertiary);
     border-radius: var(--border-radius);
+    transition: var(--transition);
 }
 
 .review-header {
@@ -336,6 +337,62 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.my-review-card {
+    background: var(--bg-tertiary);
+    border: 2px solid var(--primary-color);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.my-review-badge {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 6px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.btn-secondary {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--border-color);
+    transform: translateY(-2px);
+}
+
+.btn-danger {
+    background: #e63946;
+    color: white;
+    border: none;
+}
+
+.btn-danger:hover {
+    background: #c1121f;
+    transform: translateY(-2px);
+}
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    border-radius: var(--border-radius-sm);
+}
+
+.review-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
 }
 
 /* Сайдбар */

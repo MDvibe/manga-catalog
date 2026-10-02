@@ -332,7 +332,7 @@ function updateUIForGuest() {
 /**
  * Показ тост-уведомления
  */
-function showToast(message, type = 'info') {
+export function showToast(message, type = 'info') {
     // Удаляем существующие тосты
     document.querySelectorAll('.toast').forEach(t => t.remove());
 
