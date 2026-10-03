@@ -2,10 +2,12 @@
 // СТРАНИЦА НОВОСТЕЙ
 // ===================================
 
-import { MANGA_DATA, Utils } from './data.js';
+import { Utils } from './data.js';
 import { initAuth } from './auth.js';
+import { getAllNews } from './storage.js';
 
 let currentCategory = 'all';
+let newsDataList = [];
 
 // ===================================
 // ИНИЦИАЛИЗАЦИЯ
@@ -14,6 +16,9 @@ let currentCategory = 'all';
 document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация авторизации
     await initAuth();
+
+    // Загрузка новостей из Firestore (или фолбэк)
+    newsDataList = await getAllNews();
 
     // Инициализация элементов страницы
     initCategoryFilters();
@@ -67,7 +72,7 @@ function renderNews() {
     const container = document.getElementById('newsGrid');
     if (!container) return;
 
-    let news = [...MANGA_DATA.news];
+    let news = [...newsDataList];
 
     // Фильтрация по категории
     if (currentCategory !== 'all') {
@@ -95,7 +100,7 @@ function renderNews() {
                 ${Utils.escapeHtml(item.excerpt)}
             </p>
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-muted);">
-                <span>👁️ ${Utils.formatNumber(item.views)} просмотров</span>
+                ${item.views ? `<span>👁️ ${Utils.formatNumber(item.views)} просмотров</span>` : ''}
                 <span style="color: var(--primary-color); font-weight: 600; cursor: pointer;">
                     Читать далее →
                 </span>

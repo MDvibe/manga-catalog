@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Миграция данных в Firestore - MangaHub</title>
+    <link rel="stylesheet" href="./css/styles.css">
+    <link rel="stylesheet" href="./css/additional-styles.css">
+    <style>
+        .migrate-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+        }
+        .log-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            padding: 16px;
+            border-radius: 8px;
+            height: 350px;
+            overflow-y: auto;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+        .log-info { color: #569cd6; }
+        .log-success { color: #4ec9b0; }
+        .log-error { color: #f44747; }
+        .log-finish { color: #6a9955; font-weight: bold; }
+        .info-card {
+            background: var(--bg-tertiary);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="migrate-container">
+        <h1 style="margin-bottom: 10px;">📦 Разовая миграция данных в Firestore</h1>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            Этот инструмент переносит статическую мангу (8 тайтлов) и новости (3 шт.) из <code>data.js</code> в облачную базу данных Firestore (коллекции <code>manga</code> и <code>news</code>).
+        </p>
+
+        <div class="info-card">
+            <strong>ℹ️ Важно о правах доступа:</strong>
+            <p style="margin-top: 6px;">
+                Если в <code>firestore.rules</code> включено правило <code>allow write: if isAdmin();</code>, пользователь должен войти через Google и иметь документ со своим UID в коллекции <code>admins/{uid}</code>.
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;" id="authSection">
+            <button id="googleLoginBtn" class="btn btn-secondary">
+                🔑 Войти через Google
+            </button>
+            <span id="userStatusText" style="font-size: 14px; color: var(--text-secondary);">Не авторизован</span>
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+            <button id="startMigrationBtn" class="btn btn-primary" style="font-size: 16px; padding: 12px 24px;">
+                🚀 Запустить миграцию в Firestore
+            </button>
+            <button id="clearLogBtn" class="btn btn-secondary">
+                Очистить лог
+            </button>
+        </div>
+
+        <div class="log-box" id="logBox">
+            <div class="log-info">Готов к запуску. Нажмите «Запустить миграцию в Firestore»...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initMigrationFirebase, runMigration } from './js/migrate-data.js';
+
+        const logBox = document.getElementById('logBox');
+        const startBtn = document.getElementById('startMigrationBtn');
+        const loginBtn = document.getElementById('googleLoginBtn');
+        const statusText = document.getElementById('userStatusText');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+
+        function appendLog(message, type = 'info') {
+            const line = document.createElement('div');
+            line.className = `log-${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logBox.appendChild(line);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        clearLogBtn.addEventListener('click', () => {
+            logBox.innerHTML = '';
+        });
+
+        let authInstance = null;
+        let googleProvider = null;
+        let signInWithPopupFunc = null;
+
+        try {
+            const fb = await initMigrationFirebase();
+            authInstance = fb.auth;
+            googleProvider = new fb.GoogleAuthProvider();
+            signInWithPopupFunc = fb.signInWithPopup;
+
+            fb.onAuthStateChanged(authInstance, (user) => {
+                if (user) {
+                    statusText.innerHTML = `Вошли как: <strong>${user.displayName || user.email}</strong> (UID: <code>${user.uid}</code>)`;
+                    loginBtn.textContent = 'Выйти';
+                } else {
+                    statusText.textContent = 'Гостевой режим (не авторизован)';
+                    loginBtn.textContent = '🔑 Войти через Google';
+                }
+            });
+
+            loginBtn.addEventListener('click', async () => {
+                if (authInstance.currentUser) {
+                    await fb.signOut(authInstance);
+                    appendLog('Вы вышли из аккаунта', 'info');
+                } else {
+                    try {
+                        const res = await signInWithPopupFunc(authInstance, googleProvider);
+                        appendLog(`Авторизован: ${res.user.displayName} (UID: ${res.user.uid})`, 'success');
+                    } catch (e) {
+                        appendLog(`Ошибка входа: ${e.message}`, 'error');
+                    }
+                }
+            });
+
+        } catch (e) {
+            appendLog(`Ошибка инициализации: ${e.message}`, 'error');
+        }
+
+        startBtn.addEventListener('click', async () => {
+            startBtn.disabled = true;
+            startBtn.textContent = '⏳ Выполняется миграция...';
+
+            try {
+                await runMigration(appendLog);
+            } catch (err) {
+                appendLog(`❌ Ошибка миграции: ${err.message}`, 'error');
+                if (err.code === 'permission-denied') {
+                    appendLog('💡 Подсказка: Убедитесь, что ваш UID добавлен в коллекцию admins в Firestore или в правилах разрешена запись.', 'error');
+                }
+            } finally {
+                startBtn.disabled = false;
+                startBtn.textContent = '🚀 Запустить миграцию в Firestore';
+            }
+        });
+    </script>
+</body>
+</html>

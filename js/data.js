@@ -284,15 +284,15 @@ function generateChapters(mangaId, totalChapters) {
 }
 
 // Поиск манги
-function searchManga(query) {
-    if (!query) return MANGA_DATA.manga;
+function searchManga(query, mangaList = MANGA_DATA.manga) {
+    if (!query) return [...mangaList];
 
     const lowerQuery = query.toLowerCase();
-    return MANGA_DATA.manga.filter(manga =>
+    return mangaList.filter(manga =>
         manga.title.toLowerCase().includes(lowerQuery) ||
-        manga.titleAlt.toLowerCase().includes(lowerQuery) ||
-        manga.author.toLowerCase().includes(lowerQuery) ||
-        manga.genres.some(genre => genre.toLowerCase().includes(lowerQuery))
+        (manga.titleAlt && manga.titleAlt.toLowerCase().includes(lowerQuery)) ||
+        (manga.author && manga.author.toLowerCase().includes(lowerQuery)) ||
+        (manga.genres && manga.genres.some(genre => genre.toLowerCase().includes(lowerQuery)))
     );
 }
 
@@ -302,7 +302,7 @@ function filterManga(filters, manga = MANGA_DATA.manga) {
 
     if (filters.genres && filters.genres.length > 0) {
         results = results.filter(manga =>
-            filters.genres.some(genre => manga.genres.includes(genre))
+            manga.genres && filters.genres.some(genre => manga.genres.includes(genre))
         );
     }
 
@@ -332,31 +332,31 @@ function sortManga(manga, sortBy) {
 
     switch(sortBy) {
         case 'popular':
-            return sorted.sort((a, b) => b.views - a.views);
+            return sorted.sort((a, b) => (b.views || 0) - (a.views || 0));
         case 'rating':
-            return sorted.sort((a, b) => b.rating - a.rating);
+            return sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         case 'latest':
-            return sorted.sort((a, b) => b.id - a.id);
+            return sorted.sort((a, b) => (b.id || 0) - (a.id || 0));
         case 'newest':
-            return sorted.sort((a, b) => b.year - a.year);
+            return sorted.sort((a, b) => (b.year || 0) - (a.year || 0));
         case 'title':
-            return sorted.sort((a, b) => a.title.localeCompare(b.title));
+            return sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
         case 'year':
-            return sorted.sort((a, b) => b.year - a.year);
+            return sorted.sort((a, b) => (b.year || 0) - (a.year || 0));
         default:
             return sorted;
     }
 }
 
 // Получение рекомендаций
-function getRecommendations(basedOn = null, limit = 4) {
+function getRecommendations(basedOn = null, limit = 4, mangaList = MANGA_DATA.manga) {
     // Простая логика: если есть базовая манга, ищем с похожими жанрами
     if (basedOn && basedOn.genres) {
-        const recommendations = MANGA_DATA.manga
+        const recommendations = mangaList
             .filter(manga => manga.id !== basedOn.id)
             .map(manga => {
                 // Считаем количество совпадающих жанров
-                const matchingGenres = manga.genres.filter(genre =>
+                const matchingGenres = (manga.genres || []).filter(genre =>
                     basedOn.genres.includes(genre)
                 ).length;
                 return { manga, score: matchingGenres };
@@ -364,7 +364,7 @@ function getRecommendations(basedOn = null, limit = 4) {
             .sort((a, b) => {
                 // Сортируем сначала по количеству совпадений, потом по рейтингу
                 if (b.score !== a.score) return b.score - a.score;
-                return b.manga.rating - a.manga.rating;
+                return (b.manga.rating || 0) - (a.manga.rating || 0);
             })
             .slice(0, limit)
             .map(item => item.manga);
@@ -373,8 +373,8 @@ function getRecommendations(basedOn = null, limit = 4) {
     }
 
     // Если нет базовой манги, возвращаем топ по рейтингу
-    return MANGA_DATA.manga
-        .sort((a, b) => b.rating - a.rating)
+    return [...mangaList]
+        .sort((a, b) => (b.rating || 0) - (a.rating || 0))
         .slice(0, limit);
 }
 

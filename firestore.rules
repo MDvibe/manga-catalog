@@ -11,6 +11,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Проверка, что пользователь — администратор
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
     // Проверка, что пользователь — владелец документа
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
@@ -33,6 +38,24 @@ service cloud.firestore {
     // ===================================
     // ПРАВИЛА ДОСТУПА
     // ===================================
+
+    // Администраторы
+    match /admins/{uid} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Манга (чтение доступно всем, запись только администраторам)
+    match /manga/{mangaId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Новости (чтение доступно всем, запись только администраторам)
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
 
     // Профили пользователей
     match /users/{uid} {

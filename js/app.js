@@ -2,8 +2,11 @@
 // ГЛАВНОЕ ПРИЛОЖЕНИЕ
 // ===================================
 
-import { MANGA_DATA, Utils, sortManga, getRecommendations } from './data.js';
+import { Utils, sortManga, getRecommendations, generateGradientFromTitle } from './data.js';
 import { initAuth } from './auth.js';
+import { getAllManga } from './storage.js';
+
+let appMangaList = [];
 
 // ===================================
 // ИНИЦИАЛИЗАЦИЯ
@@ -21,6 +24,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Инициализация авторизации (асинхронно)
     await initAuth();
+
+    // Загрузка манги из Firestore (или фолбэк)
+    appMangaList = await getAllManga();
 
     // Рендеринг контента главной страницы (если мы на главной)
     if (document.getElementById('popularManga')) {
@@ -145,7 +151,7 @@ function renderPopularManga() {
     const container = document.getElementById('popularManga');
     if (!container) return;
 
-    const popularManga = sortManga(MANGA_DATA.manga, 'popular').slice(0, 8);
+    const popularManga = sortManga(appMangaList, 'popular').slice(0, 8);
     container.innerHTML = popularManga.map(manga => createMangaCard(manga)).join('');
     addMangaCardListeners();
 }
@@ -154,7 +160,7 @@ function renderLatestManga() {
     const container = document.getElementById('latestManga');
     if (!container) return;
 
-    const latestManga = sortManga(MANGA_DATA.manga, 'latest').slice(0, 6);
+    const latestManga = sortManga(appMangaList, 'latest').slice(0, 6);
     container.innerHTML = latestManga.map(manga => createMangaCard(manga)).join('');
     addMangaCardListeners();
 }
@@ -163,7 +169,7 @@ function renderRecommendations() {
     const container = document.getElementById('recommendedManga');
     if (!container) return;
 
-    const recommended = getRecommendations(null, 4);
+    const recommended = getRecommendations(null, 4, appMangaList);
     container.innerHTML = recommended.map(manga => createMangaCard(manga)).join('');
     addMangaCardListeners();
 }
@@ -172,7 +178,18 @@ function renderGenres() {
     const container = document.getElementById('genreGrid');
     if (!container) return;
 
-    container.innerHTML = MANGA_DATA.genres.map(genre => `
+    // Собираем жанры из загруженных данных манги (Firestore или фолбэк)
+    const genreCounts = {};
+    appMangaList.forEach(manga => {
+        (manga.genres || []).forEach(genre => {
+            genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+        });
+    });
+    const genres = Object.entries(genreCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count);
+
+    container.innerHTML = genres.map(genre => `
         <div class="genre-card"
              style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color))"
              onclick="window.location.href='./catalog.html?genre=${encodeURIComponent(genre.name)}'">

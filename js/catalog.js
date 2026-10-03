@@ -2,9 +2,12 @@
 // КАТАЛОГ МАНГИ
 // ===================================
 
-import { MANGA_DATA, Utils, searchManga, filterManga, sortManga } from './data.js';
+import { Utils, searchManga, filterManga, sortManga } from './data.js';
 import { createMangaCard, addMangaCardListeners } from './app.js';
 import { initAuth } from './auth.js';
+import { getAllManga } from './storage.js';
+
+let catalogMangaList = [];
 
 // Состояние каталога
 let currentFilters = {
@@ -26,6 +29,9 @@ const itemsPerPage = 12;
 document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация авторизации
     await initAuth();
+
+    // Загрузка манги из Firestore (или фолбэк)
+    catalogMangaList = await getAllManga();
 
     // Инициализация элементов страницы
     initFilters();
@@ -86,7 +92,18 @@ function renderGenreFilters() {
     const container = document.getElementById('genreFilters');
     if (!container) return;
 
-    container.innerHTML = MANGA_DATA.genres.map(genre => `
+    // Собираем жанры из загруженных данных манги (Firestore или фолбэк)
+    const genreCounts = {};
+    catalogMangaList.forEach(manga => {
+        (manga.genres || []).forEach(genre => {
+            genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+        });
+    });
+    const genres = Object.entries(genreCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count);
+
+    container.innerHTML = genres.map(genre => `
         <label class="filter-checkbox">
             <input type="checkbox" name="genre" value="${Utils.escapeHtml(genre.name)}"
                 ${currentFilters.genres.includes(genre.name) ? 'checked' : ''}>
@@ -167,7 +184,7 @@ function initSorting() {
 
 function renderCatalog() {
     const searchQuery = document.getElementById('searchInput')?.value.trim();
-    let results = searchQuery ? searchManga(searchQuery) : [...MANGA_DATA.manga];
+    let results = searchQuery ? searchManga(searchQuery, catalogMangaList) : [...catalogMangaList];
 
     // Применяем фильтры к результатам поиска
     results = filterManga(currentFilters, results);

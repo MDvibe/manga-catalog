@@ -2,11 +2,21 @@
 // СТРАНИЦА ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
 // ===================================
 
-import { MANGA_DATA, Utils, generateChapters } from './data.js';
+import { Utils, generateGradientFromTitle } from './data.js';
 import { initAuth, isAuthenticated, getCurrentUser, showToast } from './auth.js';
-import { getBookmarks, getReadingProgress, getUserReviews, getSettings, setSettings, updateReview, deleteReview } from './storage.js';
+import {
+    getBookmarks,
+    getReadingProgress,
+    getUserReviews,
+    getSettings,
+    setSettings,
+    updateReview,
+    deleteReview,
+    getAllManga
+} from './storage.js';
 
 let currentTab = 'bookmarks';
+let profileMangaList = [];
 
 // ===================================
 // ИНИЦИАЛИЗАЦИЯ
@@ -15,6 +25,9 @@ let currentTab = 'bookmarks';
 document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация авторизации
     await initAuth();
+
+    // Загрузка списка манги для профиля
+    profileMangaList = await getAllManga();
 
     // Проверяем авторизацию
     if (!isAuthenticated()) {
@@ -165,7 +178,8 @@ async function renderBookmarks() {
         return;
     }
 
-    const bookmarkedManga = MANGA_DATA.manga.filter(m => bookmarkIds.includes(m.id));
+    const list = profileMangaList;
+    const bookmarkedManga = list.filter(m => bookmarkIds.includes(m.id));
 
     container.innerHTML = bookmarkedManga.map(manga => createMangaCard(manga)).join('');
 }
@@ -211,7 +225,7 @@ async function renderReadingProgress() {
     }
 
     container.innerHTML = progressList.map(item => {
-        const manga = MANGA_DATA.manga.find(m => m.id === item.mangaId);
+        const manga = profileMangaList.find(m => m.id === item.mangaId);
         if (!manga) return '';
 
         const progressPercent = Math.round((item.currentChapter / manga.chapters) * 100);
@@ -267,7 +281,7 @@ async function renderUserReviews() {
     }
 
     container.innerHTML = reviews.map(review => {
-        const manga = MANGA_DATA.manga.find(m => m.id === review.mangaId);
+        const manga = profileMangaList.find(m => m.id === review.mangaId);
         if (!manga) return '';
 
         return `
@@ -523,27 +537,4 @@ async function renderSettings() {
         // Показываем уведомление
         showToast('✅ Настройки сохранены');
     });
-}
-
-function showToast(message) {
-    const toast = document.createElement('div');
-    toast.textContent = message;
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 2rem;
-        right: 2rem;
-        background: var(--primary-color);
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 8px;
-        box-shadow: var(--shadow-lg);
-        z-index: 10000;
-        animation: slideInUp 0.3s ease-out;
-    `;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'fadeOut 0.3s ease-out';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
 }

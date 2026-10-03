@@ -64,6 +64,105 @@ function showToast(message, type = 'info') {
 }
 
 // ===================================
+// МАНГА И НОВОСТИ (FIRESTORE C ФОЛБЭКОМ НА ДАННЫЕ ПО УМОЛЧАНИЮ)
+// ===================================
+
+import { MANGA_DATA as DEFAULT_MANGA_DATA, generateGradientFromTitle } from './data.js';
+
+/**
+ * Получить весь список манги (из Firestore с фолбэком на локальные данные)
+ */
+export async function getAllManga() {
+    if (isFirebaseInitialized && firestore) {
+        try {
+            const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            const mangaRef = collection(firestore, 'manga');
+            const snapshot = await getDocs(mangaRef);
+
+            if (!snapshot.empty) {
+                const list = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const manga = {
+                        id: parseInt(data.id || doc.id),
+                        ...data
+                    };
+                    // Гарантируем наличие градиента
+                    if (!manga.gradient && manga.title) {
+                        manga.gradient = generateGradientFromTitle(manga.title);
+                    }
+                    return manga;
+                });
+                // Сортируем по id по умолчанию
+                return list.sort((a, b) => a.id - b.id);
+            }
+        } catch (error) {
+            console.warn('Не удалось загрузить мангу из Firestore, используем локальные данные:', error);
+        }
+    }
+    return [...DEFAULT_MANGA_DATA.manga];
+}
+
+/**
+ * Получить мангу по ID (из Firestore с фолбэком на локальные данные)
+ */
+export async function getMangaById(mangaId) {
+    const idNum = parseInt(mangaId);
+    if (!idNum) return null;
+
+    if (isFirebaseInitialized && firestore) {
+        try {
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            const mangaRef = doc(firestore, 'manga', idNum.toString());
+            const snap = await getDoc(mangaRef);
+
+            if (snap.exists()) {
+                const data = snap.data();
+                const manga = {
+                    id: parseInt(data.id || snap.id),
+                    ...data
+                };
+                // Гарантируем наличие градиента
+                if (!manga.gradient && manga.title) {
+                    manga.gradient = generateGradientFromTitle(manga.title);
+                }
+                return manga;
+            }
+        } catch (error) {
+            console.warn(`Не удалось загрузить мангу #${mangaId} из Firestore:`, error);
+        }
+    }
+
+    return DEFAULT_MANGA_DATA.manga.find(m => m.id === idNum) || null;
+}
+
+/**
+ * Получить список новостей (из Firestore с фолбэком на локальные данные)
+ */
+export async function getAllNews() {
+    if (isFirebaseInitialized && firestore) {
+        try {
+            const { collection, getDocs, query, orderBy } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            const newsRef = collection(firestore, 'news');
+            const snapshot = await getDocs(newsRef);
+
+            if (!snapshot.empty) {
+                const list = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: parseInt(data.id || doc.id),
+                        ...data
+                    };
+                });
+                return list.sort((a, b) => (b.id || 0) - (a.id || 0));
+            }
+        } catch (error) {
+            console.warn('Не удалось загрузить новости из Firestore, используем локальные данные:', error);
+        }
+    }
+    return [...DEFAULT_MANGA_DATA.news];
+}
+
+// ===================================
 // ЗАКЛАДКИ
 // ===================================
 

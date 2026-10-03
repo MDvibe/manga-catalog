@@ -2,7 +2,7 @@
 // ДЕТАЛЬНАЯ СТРАНИЦА МАНГИ
 // ===================================
 
-import { MANGA_DATA, Utils, generateChapters, getRecommendations } from './data.js';
+import { Utils, generateChapters, getRecommendations, generateGradientFromTitle } from './data.js';
 import {
     getBookmarks,
     toggleBookmark,
@@ -11,12 +11,15 @@ import {
     getUserReviewForManga,
     addReview,
     updateReview,
-    deleteReview
+    deleteReview,
+    getMangaById,
+    getAllManga
 } from './storage.js';
 import { initAuth, isAuthenticated, getCurrentUser, showToast, onAuthStateChange } from './auth.js';
 
 let currentManga = null;
 let currentChapters = [];
+let allMangaList = [];
 let selectedRating = 0;
 let isEditingMyReview = false;
 
@@ -29,10 +32,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initAuth();
 
     // Загрузка данных манги
-    loadMangaDetails();
+    await loadMangaDetails();
 });
 
-function loadMangaDetails() {
+async function loadMangaDetails() {
     const urlParams = new URLSearchParams(window.location.search);
     const mangaId = parseInt(urlParams.get('id'));
 
@@ -41,7 +44,8 @@ function loadMangaDetails() {
         return;
     }
 
-    currentManga = MANGA_DATA.manga.find(m => m.id === mangaId);
+    allMangaList = await getAllManga();
+    currentManga = await getMangaById(mangaId);
 
     if (!currentManga) {
         window.location.href = './catalog.html';
@@ -291,7 +295,7 @@ function renderRelatedManga() {
     const container = document.getElementById('relatedManga');
     if (!container) return;
 
-    const related = getRecommendations(currentManga, 4);
+    const related = getRecommendations(currentManga, 4, allMangaList);
     container.innerHTML = related.map(manga => `
         <div class="related-item" onclick="window.location.href='./manga-detail.html?id=${manga.id}'"
              style="cursor: pointer; padding: 0.5rem; display: flex; gap: 1rem; align-items: center;">
