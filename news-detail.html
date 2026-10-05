@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Подробная информация о манге, чтение глав, отзывы и рекомендации">
-    <title>Информация о манге - MangaHub</title>
+    <meta name="description" content="Подробная информация о новости из мира манги">
+    <title>Новость - MangaHub</title>
     <link rel="stylesheet" href="./css/styles.css">
     <link rel="stylesheet" href="./css/additional-styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -20,14 +20,14 @@
             </div>
 
             <div class="nav-search">
-                <input type="search" id="searchInput" placeholder="Поиск манги..." class="search-input">
+                <input type="search" id="searchInput" placeholder="Поиск..." class="search-input">
                 <button class="search-btn" aria-label="Искать">🔍</button>
             </div>
 
             <ul class="nav-menu">
                 <li><a href="./index.html" class="nav-link">Главная</a></li>
                 <li><a href="./catalog.html" class="nav-link">Каталог</a></li>
-                <li><a href="./news.html" class="nav-link">Новости</a></li>
+                <li><a href="./news.html" class="nav-link active">Новости</a></li>
                 <li><a href="./profile.html" class="nav-link">Профиль</a></li>
                 <li>
                     <button id="themeToggle" class="theme-toggle" aria-label="Переключить тему">
@@ -51,53 +51,26 @@
                 <!-- Рендерится через JS -->
             </nav>
 
-            <div class="manga-header" id="mangaHeader">
+            <div class="manga-header" id="newsHeader">
                 <!-- Рендерится через JS -->
             </div>
 
             <div class="manga-content-layout">
                 <div class="manga-main-content">
                     <section class="manga-section">
-                        <h2 class="section-title">Описание</h2>
-                        <div id="mangaDescription" style="margin-top: 1rem; line-height: 1.8;">
-                            <!-- Описание -->
+                        <h2 class="section-title">Содержание</h2>
+                        <div id="newsContent" style="margin-top: 1rem; line-height: 1.8; white-space: pre-wrap;">
+                            <!-- Полный текст новости -->
                         </div>
                     </section>
 
-                    <section class="manga-section">
-                        <h2 class="section-title">Главы</h2>
-                        <div class="chapters-list" id="chaptersList" style="margin-top: 1rem;">
-                            <!-- Список глав -->
-                        </div>
-                    </section>
-
-                    <section class="manga-section">
-                        <h2 class="section-title">Отзывы и рецензии</h2>
-
-                        <div id="reviewFormContainer">
-                            <!-- Рендерится через JS: форма создания, форма редактирования или карточка своего отзыва -->
-                        </div>
-
-                        <div class="reviews-list" id="reviewsList">
-                            <!-- Список отзывов -->
+                    <section class="manga-section" id="relatedNewsSection" style="display: none;">
+                        <h2 class="section-title">Похожие новости</h2>
+                        <div id="relatedNews" style="margin-top: 1rem; display: grid; gap: 1rem;">
+                            <!-- Похожие новости -->
                         </div>
                     </section>
                 </div>
-
-                <aside class="manga-sidebar">
-                    <div class="sidebar-card">
-                        <button id="addToBookmarks" class="btn btn-primary btn-full">
-                            <span class="btn-icon">🤍</span> Добавить в закладки
-                        </button>
-                    </div>
-
-                    <div class="sidebar-card">
-                        <h3 class="filter-title">Похожая манга</h3>
-                        <div id="relatedManga" style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;">
-                            <!-- Рекомендации -->
-                        </div>
-                    </div>
-                </aside>
             </div>
         </div>
     </main>
@@ -111,6 +84,6 @@
     </footer>
 
     <script type="module" src="./js/app.js"></script>
-    <script type="module" src="./js/manga-detail.js"></script>
+    <script type="module" src="./js/news-detail.js"></script>
 </body>
 </html>

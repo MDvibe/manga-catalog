@@ -91,22 +91,21 @@ function renderNews() {
     }
 
     container.innerHTML = news.map(item => `
-        <article class="news-card" onclick="alert('Открыть новость: ${Utils.escapeHtml(item.title)}')">
+        <a href="news-detail.html?id=${item.id}" class="news-card" style="text-decoration: none; display: block; cursor: pointer;">
             <div class="news-meta">
                 <span class="news-category">${getCategoryName(item.category)}</span>
-                <span>${item.date}</span>
+                <span>${Utils.escapeHtml(item.date)}</span>
             </div>
             <h2 class="news-title">${Utils.escapeHtml(item.title)}</h2>
             <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
                 ${Utils.escapeHtml(item.excerpt)}
             </p>
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-muted);">
-                ${item.views ? `<span>👁️ ${Utils.formatNumber(item.views)} просмотров</span>` : ''}
-                <span style="color: var(--primary-color); font-weight: 600; cursor: pointer;">
+            <div style="display: flex; justify-content: flex-end; align-items: center; font-size: 0.85rem;">
+                <span style="color: var(--primary-color); font-weight: 600;">
                     Читать далее →
                 </span>
             </div>
-        </article>
+        </a>
     `).join('');
 }
 

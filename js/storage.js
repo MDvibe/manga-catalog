@@ -178,6 +178,34 @@ export async function getAllNews() {
     return [...DEFAULT_MANGA_DATA.news];
 }
 
+/**
+ * Получить новость по ID (из Firestore с фолбэком на локальные данные)
+ */
+export async function getNewsById(newsId) {
+    const idNum = parseInt(newsId);
+    if (!idNum) return null;
+
+    if (isFirebaseInitialized && firestore) {
+        try {
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            const newsRef = doc(firestore, 'news', idNum.toString());
+            const snap = await getDoc(newsRef);
+
+            if (snap.exists()) {
+                const data = snap.data();
+                return {
+                    id: parseInt(data.id || snap.id),
+                    ...data
+                };
+            }
+        } catch (error) {
+            console.warn(`Не удалось загрузить новость #${newsId} из Firestore:`, error);
+        }
+    }
+
+    return DEFAULT_MANGA_DATA.news.find(n => n.id === idNum) || null;
+}
+
 // ===================================
 // ЗАКЛАДКИ
 // ===================================

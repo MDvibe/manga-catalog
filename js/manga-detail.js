@@ -52,6 +52,7 @@ async function loadMangaDetails() {
         return;
     }
 
+    renderBreadcrumbs();
     renderMangaHeader();
     renderMangaDescription();
     renderChapters();
@@ -63,6 +64,19 @@ async function loadMangaDetails() {
 // ===================================
 // РЕНДЕРИНГ
 // ===================================
+
+function renderBreadcrumbs() {
+    const container = document.getElementById('breadcrumbs');
+    if (!container || !currentManga) return;
+
+    container.innerHTML = `
+        <a href="./index.html" class="breadcrumb-link">Главная</a>
+        <span class="breadcrumb-separator">→</span>
+        <a href="./catalog.html" class="breadcrumb-link">Каталог</a>
+        <span class="breadcrumb-separator">→</span>
+        <span class="breadcrumb-current">${Utils.escapeHtml(currentManga.title)}</span>
+    `;
+}
 
 function renderMangaHeader() {
     const container = document.getElementById('mangaHeader');
