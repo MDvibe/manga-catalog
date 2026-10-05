@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель - MangaHub</title>
+    <link rel="stylesheet" href="./css/styles.css">
+    <link rel="stylesheet" href="./css/additional-styles.css">
+    <style>
+        .admin-wrap {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 30px;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+        }
+        /* Экраны доступа */
+        .admin-screen { text-align: center; padding: 3rem 1rem; }
+        .admin-screen[hidden] { display: none; }
+        .admin-screen h1 { margin-bottom: 1rem; }
+        .admin-screen p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+        /* Секции панели */
+        .admin-section { margin-top: 2.5rem; }
+        .admin-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .admin-section-header h2 { font-size: 1.3rem; }
+        .admin-muted { color: var(--text-muted); font-size: 0.9rem; }
+        /* Таблицы */
+        .admin-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; }
+        table.admin-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+        .admin-table th, .admin-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .admin-table th { background: var(--bg-tertiary); font-weight: 600; }
+        .admin-table tr:last-child td { border-bottom: none; }
+        .admin-table .cell-actions { display: flex; gap: 0.5rem; }
+        .admin-cover-swatch { width: 36px; height: 50px; border-radius: 4px; flex-shrink: 0; }
+        .cell-title-strong { font-weight: 600; }
+        .cell-title-alt { color: var(--text-muted); font-size: 0.82rem; }
+        /* Модальные окна */
+        .admin-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 40px 16px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        .admin-modal[hidden] { display: none; }
+        .admin-modal-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            padding: 24px;
+            width: 100%;
+            max-width: 640px;
+        }
+        .admin-modal-card h2 { margin-bottom: 1.25rem; font-size: 1.2rem; }
+        /* Формы */
+        .admin-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 16px;
+        }
+        .admin-form-grid .field-full { grid-column: 1 / -1; }
+        .admin-field label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        .admin-field input[type="text"],
+        .admin-field input[type="number"],
+        .admin-field input[type="date"],
+        .admin-field select,
+        .admin-field textarea {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+        .admin-field textarea { resize: vertical; }
+        .admin-checkbox-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+        }
+        .admin-checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 0.92rem; }
+        .admin-modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+        }
+        @media (max-width: 640px) {
+            .admin-form-grid { grid-template-columns: 1fr; }
+            .admin-wrap { margin: 16px auto; padding: 18px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-wrap">
+
+        <!-- Экран 1: проверка доступа -->
+        <div class="admin-screen" id="adminLoading">
+            <h1>⏳ Проверка доступа…</h1>
+            <p id="adminLoadingText">Подождите, проверяем авторизацию</p>
+        </div>
+
+        <!-- Экран 2: не авторизован -->
+        <div class="admin-screen" id="loginScreen" hidden>
+            <h1>🔐 Админ-панель</h1>
+            <p>Войдите через Google</p>
+            <button id="adminLoginBtn" class="btn btn-primary" style="font-size: 16px; padding: 12px 24px;">
+                Войти через Google
+            </button>
+            <p id="loginHint" class="admin-muted" style="margin-top: 1rem;"></p>
+        </div>
+
+        <!-- Экран 3: доступ запрещён -->
+        <div class="admin-screen" id="accessDenied" hidden>
+            <h1>⛔ Доступ запрещён</h1>
+            <p>Доступ запрещён. Эта страница только для администраторов.</p>
+            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                <a href="./index.html" class="btn btn-secondary">На главную</a>
+                <button id="deniedSwitchBtn" class="btn btn-primary">Войти другим аккаунтом</button>
+            </div>
+        </div>
+
+        <!-- Экран 4: панель -->
+        <div id="adminPanel" hidden>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <h1 style="font-size: 1.5rem;">🛠️ Админ-панель</h1>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span id="adminUserLine" class="admin-muted"></span>
+                    <button id="adminLogoutBtn" class="btn btn-secondary">Выйти</button>
+                </div>
+            </div>
+
+            <!-- Раздел: МАНГА -->
+            <section class="admin-section">
+                <div class="admin-section-header">
+                    <h2>📖 Манга</h2>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span id="mangaCount" class="admin-muted"></span>
+                        <button id="addMangaBtn" class="btn btn-primary">+ Добавить тайтл</button>
+                    </div>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Название</th>
+                                <th>Автор</th>
+                                <th>Год</th>
+                                <th>Статус</th>
+                                <th>Рейтинг</th>
+                                <th>Глав</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mangaTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Раздел: НОВОСТИ -->
+            <section class="admin-section">
+                <div class="admin-section-header">
+                    <h2>📰 Новости</h2>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span id="newsCount" class="admin-muted"></span>
+                        <button id="addNewsBtn" class="btn btn-primary">+ Добавить новость</button>
+                    </div>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Категория</th>
+                                <th>Заголовок</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="newsTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- Модальная форма: МАНГА -->
+        <div class="admin-modal" id="mangaModal" hidden>
+            <div class="admin-modal-card">
+                <h2 id="mangaModalTitle">Добавить тайтл</h2>
+                <form id="mangaForm">
+                    <div class="admin-form-grid">
+                        <div class="admin-field">
+                            <label for="mangaTitle">Название *</label>
+                            <input type="text" id="mangaTitle" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaTitleAlt">Альтернативное название</label>
+                            <input type="text" id="mangaTitleAlt">
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaAuthor">Автор *</label>
+                            <input type="text" id="mangaAuthor" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaYear">Год *</label>
+                            <input type="number" id="mangaYear" min="1900" max="2100" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaStatus">Статус *</label>
+                            <select id="mangaStatus" required>
+                                <option value="ongoing">Онгоинг</option>
+                                <option value="completed">Завершена</option>
+                                <option value="hiatus">На паузе</option>
+                            </select>
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaRating">Рейтинг (0–10) *</label>
+                            <input type="number" id="mangaRating" min="0" max="10" step="0.1" required>
+                        </div>
+                        <div class="admin-field field-full">
+                            <label>Жанры * (галочки + свои через запятую)</label>
+                            <div class="admin-checkbox-grid" id="mangaGenresGrid"></div>
+                            <input type="text" id="mangaGenresExtra" placeholder="Другие жанры через запятую" style="margin-top: 8px;">
+                        </div>
+                        <div class="admin-field field-full">
+                            <label for="mangaDescription">Описание *</label>
+                            <textarea id="mangaDescription" rows="5" required></textarea>
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaChapters">Глав *</label>
+                            <input type="number" id="mangaChapters" min="0" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaVotes">Голосов</label>
+                            <input type="number" id="mangaVotes" min="0" value="0">
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaViews">Просмотров</label>
+                            <input type="number" id="mangaViews" min="0" value="0">
+                        </div>
+                        <div class="admin-field">
+                            <label for="mangaBookmarks">В закладках</label>
+                            <input type="number" id="mangaBookmarks" min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="admin-modal-actions">
+                        <button type="button" class="btn btn-secondary" id="mangaCancelBtn">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Модальная форма: НОВОСТИ -->
+        <div class="admin-modal" id="newsModal" hidden>
+            <div class="admin-modal-card">
+                <h2 id="newsModalTitle">Добавить новость</h2>
+                <form id="newsForm">
+                    <div class="admin-form-grid">
+                        <div class="admin-field field-full">
+                            <label for="newsTitle">Заголовок *</label>
+                            <input type="text" id="newsTitle" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="newsCategory">Категория *</label>
+                            <select id="newsCategory" required>
+                                <option value="announcements">Анонсы</option>
+                                <option value="releases">Релизы</option>
+                                <option value="industry">Индустрия</option>
+                                <option value="events">События</option>
+                            </select>
+                        </div>
+                        <div class="admin-field">
+                            <label for="newsDate">Дата *</label>
+                            <input type="date" id="newsDate" required>
+                        </div>
+                        <div class="admin-field field-full">
+                            <label for="newsExcerpt">Краткое описание *</label>
+                            <textarea id="newsExcerpt" rows="3" required></textarea>
+                        </div>
+                        <div class="admin-field field-full">
+                            <label for="newsContent">Полный текст</label>
+                            <textarea id="newsContent" rows="6"></textarea>
+                        </div>
+                    </div>
+                    <div class="admin-modal-actions">
+                        <button type="button" class="btn btn-secondary" id="newsCancelBtn">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module" src="./js/admin.js"></script>
+</body>
+</html>

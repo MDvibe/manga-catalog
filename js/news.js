@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initCategoryFilters() {
     const categories = [
         { id: 'all', name: 'Все новости', icon: '📰' },
+        { id: 'announcements', name: 'Анонсы', icon: '📣' },
         { id: 'releases', name: 'Релизы', icon: '🚀' },
         { id: 'industry', name: 'Индустрия', icon: '🏢' },
         { id: 'events', name: 'События', icon: '🎉' }
@@ -111,6 +112,7 @@ function renderNews() {
 
 function getCategoryName(categoryId) {
     const names = {
+        'announcements': '📣 Анонсы',
         'releases': '🚀 Релизы',
         'industry': '🏢 Индустрия',
         'events': '🎉 События'

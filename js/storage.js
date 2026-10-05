@@ -20,6 +20,22 @@ export function initializeFirebase(firestoreInstance, authInstance) {
 }
 
 /**
+ * Получить экземпляр Firestore
+ * (для служебных страниц с прямым доступом к БД, например, админ-панели)
+ */
+export function getDb() {
+    return firestore;
+}
+
+/**
+ * Получить экземпляр Firebase Auth
+ * (для прямой подписки на onAuthStateChanged без гонок «немедленного» вызова обёртки)
+ */
+export function getAuthInstance() {
+    return auth;
+}
+
+/**
  * Проверка доступности Firestore
  */
 function isFirestoreAvailable() {
